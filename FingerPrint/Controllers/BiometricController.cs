@@ -8,11 +8,18 @@ namespace FingerPrint.Controllers
     [ApiController]
     public class BiometricController : ControllerBase
     {
+        private readonly IWebHostEnvironment _webHostEnvironment;
+
+        public BiometricController(IWebHostEnvironment webHostEnvironment)
+        {
+            _webHostEnvironment = webHostEnvironment;
+        }
+
         // GET: api/<BiometricController>
         [HttpGet]
         public object Get()
         {
-            BiometricService biometricService = new BiometricService();
+            BiometricService biometricService = new BiometricService(_webHostEnvironment);
             var data = biometricService.Scan();
             return data;
         }

@@ -1,12 +1,15 @@
-﻿using SecuGen.FDxSDKPro.Windows;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting;
+using SecuGen.FDxSDKPro.Windows;
 using System.Drawing;
+using System.Drawing.Imaging;
 
 namespace FingerPrint
 {
     public class BiometricService
     {
         private SGFingerPrintManager m_FPM;
-
+        private readonly IWebHostEnvironment _hostEnvironment;
         private bool m_LedOn = false;
         private Int32 m_ImageWidth;
         private Int32 m_ImageHeight;
@@ -20,73 +23,96 @@ namespace FingerPrint
         Byte[] fp_image;
 
         private SGFPMDeviceList[] m_DevList; // Used for EnumerateDevice
-        public BiometricService()
+       
+        public BiometricService(IWebHostEnvironment hostEnvironment)
         {
-            m_FPM = new SGFingerPrintManager();            
+            _hostEnvironment = hostEnvironment;
+            m_FPM = new SGFingerPrintManager();
             device_name = SGFPMDeviceName.DEV_AUTO;
             device_id = (Int32)(SGFPMPortAddr.USB_AUTO_DETECT);
         }
+
         public ResultModel Scan()
-        {            
-            elap_time = Environment.TickCount;
-            fp_image = new Byte[260 * 300];
-            iError = m_FPM.Init(device_name);
-            iError = m_FPM.OpenDevice(device_id);
-            iError = m_FPM.GetImage(fp_image);
-
-            if (iError == (Int32)SGFPMError.ERROR_NONE)
-            {
-                elap_time = Environment.TickCount - elap_time;
-               
-                var img = Convert.ToBase64String(fp_image);
-              
-                string base64String = Convert.ToBase64String(fp_image, 0, fp_image.Length);
-                var ImageUrl = "data:image/png;base64," + base64String;
-                return new ResultModel
-                {
-                    Data = this.DrawImage(fp_image, new object()),
-                    Success= true,
-                    Message = ""
-                };
-
-            }
-            else
-            {
-
-                return new ResultModel
-                {
-                    Message = this.DisplayError("GetImage()", iError),
-                    Success= false,
-                    Data = null
-                };
-
-            }
-        }
-        public string DrawImage(Byte[] imgData, object picBox)
         {
-            int colorval;
-            Bitmap bmp = new Bitmap(260, 300);
-            picBox = (Image)bmp;
-
-            for (int i = 0; i < bmp.Width; i++)
+            try
             {
-                for (int j = 0; j < bmp.Height; j++)
+                elap_time = Environment.TickCount;
+                fp_image = new Byte[260 * 300];
+                iError = m_FPM.Init(device_name);
+                iError = m_FPM.OpenDevice(device_id);
+                iError = m_FPM.GetImage(fp_image);
+
+                if (iError == (Int32)SGFPMError.ERROR_NONE)
                 {
-                    colorval = (int)imgData[(j * 260) + i];
-                    bmp.SetPixel(i, j, Color.FromArgb(colorval, colorval, colorval));
+                    elap_time = Environment.TickCount - elap_time;
+
+                    var img = Convert.ToBase64String(fp_image);
+
+                    string base64String = Convert.ToBase64String(fp_image, 0, fp_image.Length);
+                    var ImageUrl = "data:image/png;base64," + base64String;
+                    return new ResultModel
+                    {
+                        Data = this.DrawImage(fp_image, new object()),
+                        Success = true,
+                        Message = ""
+                    };
+
+                }
+                else
+                {
+
+                    return new ResultModel
+                    {
+                        Message = this.DisplayError("GetImage()", iError),
+                        Success = false,
+                        Data = null
+                    };
+
                 }
             }
-            Image image = (Image)bmp;
-            image.Save("New2.png");
-            //string img64Bit = ConvertImageToBase64String(Image.FromFile("New.png"));
+            catch (Exception ex)
+            {
+                return new ResultModel { Message = ex.Message,Success=false };
+            }
+        }
+        public  string DrawImage(Byte[] imgData, object picBox)
+        {
+            try
+            {
+                int colorval;
+                string wwwRootPath = _hostEnvironment.WebRootPath;
+                string fileName = "yymmssfff.png";
+                Bitmap bmp = new Bitmap(260, 300);
+                picBox = (Image)bmp;
 
-            return ConvertImageToBase64String(Image.FromFile("New.png"));
+                for (int i = 0; i < bmp.Width; i++)
+                {
+                    for (int j = 0; j < bmp.Height; j++)
+                    {
+                        colorval = (int)imgData[(j * 260) + i];
+                        bmp.SetPixel(i, j, Color.FromArgb(colorval, colorval, colorval));
+                    }
+                }
+                Image image = (Image)bmp;
+
+                image.Save(fileName, ImageFormat.Png);
+                image.Dispose();
+                var base64 = ConvertImageToBase64String(Image.FromFile(fileName));
+                File.Delete(fileName);
+                return base64;
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
+
         }
         public static string ConvertImageToBase64String(Image image)
         {
             using (MemoryStream ms = new MemoryStream())
             {
                 image.Save(ms, image.RawFormat);
+                image.Dispose();
                 return Convert.ToBase64String(ms.ToArray());
             }
         }
