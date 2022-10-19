@@ -23,6 +23,13 @@ namespace FingerPrint.Controllers
             var data = biometricService.Scan();
             return data;
         }
+        [HttpPost]
+        public object Get([FromBody]string base64Img)
+        {
+            BiometricService biometricService = new BiometricService(_webHostEnvironment);
+            var data = biometricService.Verifition(base64Img);
+            return data;
+        }
 
       
     }

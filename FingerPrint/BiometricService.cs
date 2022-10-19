@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Extensions.Hosting;
 using SecuGen.FDxSDKPro.Windows;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Text;
 
 namespace FingerPrint
 {
@@ -16,6 +18,7 @@ namespace FingerPrint
         private Byte[] m_RegMin1 = null;
         private Byte[] m_RegMin2;
         private Byte[] m_VrfMin;
+
         SGFPMDeviceName device_name;
         Int32 device_id;
         Int32 iError;
@@ -30,8 +33,67 @@ namespace FingerPrint
             m_FPM = new SGFingerPrintManager();
             device_name = SGFPMDeviceName.DEV_AUTO;
             device_id = (Int32)(SGFPMPortAddr.USB_AUTO_DETECT);
+            m_RegMin1 = new Byte[400];
+            m_RegMin2 = new Byte[400];
+            m_VrfMin = new Byte[400];
         }
 
+        public ResultModel Verifition(string base64Img)
+        {
+            try
+            {
+                elap_time = Environment.TickCount;
+                fp_image = new Byte[260 * 300];
+                iError = m_FPM.Init(device_name);
+                iError = m_FPM.OpenDevice(device_id);
+                iError = m_FPM.GetImage(fp_image);
+                bool matched1 = false;
+                SGFPMSecurityLevel secu_level;
+                if (iError == (Int32)SGFPMError.ERROR_NONE)
+                {
+                    elap_time = Environment.TickCount - elap_time;
+                    m_RegMin2 = Convert.FromBase64String(base64Img);
+                    iError = m_FPM.CreateTemplate(fp_image, m_RegMin1);
+                    string base64String = Convert.ToBase64String(fp_image, 0, fp_image.Length);
+                    var imgfile = Convert.FromBase64String(base64String);
+                    iError = m_FPM.CreateTemplate(null, m_RegMin2, m_VrfMin);
+                    secu_level = SGFPMSecurityLevel.BELOW_NORMAL;
+
+                    iError = m_FPM.MatchTemplate(m_RegMin1, m_VrfMin, secu_level, ref matched1);
+
+                    if (iError == (Int32)SGFPMError.ERROR_NONE)
+                    {
+                        if (matched1)
+                            return new ResultModel { Success = true, Message = "Verification Success" };
+                        else
+                            return new ResultModel { Success = true, Message = "Verification Failed" };
+                    }
+                    else
+                        DisplayError("MatchTemplate()", iError);
+
+                    return new ResultModel
+                    {
+                        Data = this.DrawImage(fp_image, new object()),
+                        Success = true
+                    };
+
+                }
+                else
+                {
+
+                    return new ResultModel
+                    {
+                        Message = this.DisplayError("GetImage()", iError),
+                        Success = false
+                    };
+
+                }
+            }
+            catch (Exception ex)
+            {
+                return new ResultModel { Message = ex.Message, Success = false };
+            }
+        }
         public ResultModel Scan()
         {
             try
@@ -52,7 +114,11 @@ namespace FingerPrint
                     var ImageUrl = "data:image/png;base64," + base64String;
                     return new ResultModel
                     {
-                        Data = this.DrawImage(fp_image, new object()),
+                        Data = new
+                        {
+                            base64= this.DrawImage(fp_image, new object()),
+                            cipher = base64String
+                        },
                         Success = true,
                         Message = ""
                     };
@@ -228,6 +294,17 @@ namespace FingerPrint
             //text = funcName + " Error # " + iError + " :" + text;
             text =  text;
             return text;
+        }
+        public static string EncodeTo64(string toEncode)
+        {
+            byte[] toEncodeAsBytes = Encoding.ASCII.GetBytes(toEncode);
+            return Convert.ToBase64String(toEncodeAsBytes);
+        }
+
+        public static string DecodeFrom64(string encodedData)
+        {
+            byte[] encodedDataAsBytes = Convert.FromBase64String(encodedData);
+            return Encoding.ASCII.GetString(encodedDataAsBytes);
         }
     }
 }
